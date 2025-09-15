@@ -1,0 +1,139 @@
+### 0. Experiment
+experiment:
+  name: "Experiments"
+  log_patch_address: "/kaggle/working/adversarial-patch-transferability/Experiments/"
+  device: "cuda"
+
+### 1.Model
+model:
+  ### name: 'pidnet_s'
+  name: "segformer"
+  hf_name: "nvidia/segformer-b0-finetuned-cityscapes-1024-1024"
+  segformer_name: 'segformer_b0'
+  # If you have a local HF folder (config.json + pytorch_model.bin):
+  segformer_ckpt_dir: /kaggle/input/my_local_hf_segformer_dir
+  # OR if you saved an HF-style state_dict to a .pth:
+  segformer_ckpt: /kaggle/input/segformer_b0_hf_style/my_state_dict.pth
+
+### 2. Dataa
+dataset:
+  name: "cityscapes"
+  root: "/kaggle/input/cityscapes-for-segmentation/Cityscapes/"
+  train: "train.txt"
+  test: "test.txt"
+  val: "val.txt"
+  trainval: "trainval.txt"
+  num_classes: 19
+
+### 3. Patch
+patch:
+  size: 200
+  #loc: "corner"
+  #loc: "random"
+  loc: "center"
+
+
+### 3.Optimizer
+optimizer:
+  optimizer: "sgd"
+  ### init_lr: 0.005
+  momentum: 0.9
+  weight_decay: 0.0005
+  nesterov: False
+  exponentiallr: True
+  exponentiallr_gamma: 0.995
+  init_lr: 2.0e-2
+  use_pgd: true          # set true for PGD
+  pgd_steps: 7
+  pgd_alpha: 0.007843     # 2/255
+
+## 4. Loss
+loss:
+  use_ohem: True
+  ohemthres: 0.9
+  ohemkeep: 131072
+  balance_weights: [0.4, 1.0]
+  sb_weights: 1.0
+
+  ### For Vit To CNN transfer Training
+  tv_weight: 1.0e-4
+  attn_hijack_w: 1.0e-1
+  boundary_w: 2.0e-1
+  freq_w: 5.0e-2
+  grad_align_w: 1.0e-1    # needs surrogate to be enabled
+
+
+### 5.Training 
+train:
+  width: 1024
+  height: 1024
+  base_size: 2048
+  flip: True
+  shuffle: True
+  ignore_label: 255
+  num_workers: 2
+  pin_memory: True
+  drop_last: False
+  batch_size: 1     # adjust according to gpu resources
+  multi_scale: True
+  scale_factor: 16
+  power: 2.5
+  log_per_iters: 1
+  start_epoch: 0
+  end_epoch: 20
+  max_batches_per_epoch: 300      # was ~2975
+  max_epochs: 10                  # was 30 (you can still resume later)
+  surrogate_every: 4              # run surrogate every 4th step only
+  vit_downscale: 0.75             # feed a 0.75× resized image to SegFormer
+  # finetune: False
+  # finetune_add: '/content/drive/MyDrive/Colab Notebooks/1_Papers/2_RobustRealtimeSS/1_Pretraining_cityscape/1_PIDNet/experiments/pidnet_s_crop1024x1024_ExponentialLR0995_batch10_basesize2048_randscale0_5to2/checkpoints/2025-01-02 08:36:14 EST-0500_141_0.648.pth.tar'
+
+
+### 6. Test
+test:
+  width: 2048
+  height: 1024
+  base_size: 1024
+  batch_size: 1
+  output_index_pidnet: 1 # at index 1, we have I branch output
+  output_index_icnet: 0
+  output_index_bisenet: 0
+  num_workers: 2
+  pin_memory: True
+  drop_last: False
+  multi_scale: False
+  flip_test: False
+  
+### 7. attack
+
+attack:
+  gamma_start: 0.9
+  gamma_end: 0.5
+  beta_start: 0.1
+  beta_end: 0.5
+  margin: 0.1
+  lambda_ent: 0.1
+  
+  use_margin:  False
+
+  # new entries for schedulers & mixing
+  stage1_epochs: 15        # how many epochs are “Stage 1”
+  stage2_epochs: 15        # how many epochs are “Stage 2” (so total=end_epoch)
+  eta:            0.5      # weight for mixing L1 vs L2 (per-pixel blend)
+
+  # feature-space divergence
+  use_feat_div:  False     # set True to turn on feature-divergence term
+
+  # (optional) EOT curriculum flag
+  use_hard_eot:  True      # if True, you can detect epoch ≥ stage1_epochs and switch to stronger EOT
+  use_segpgd: true        # turn SegPGD mode on/off
+  segpgd_steps: 3         # T: inner attack steps per batch (start with 2–3)
+  segpgd_alpha: 0.005     # α: per-step step size for the patch update (use your epsilon if you like)
+
+freq:
+  r_low: 0.12
+  r_high: 0.45
+
+surrogate:
+  enable: true
+  name: "pidnet_s"
